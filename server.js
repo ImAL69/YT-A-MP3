@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
@@ -16,8 +16,51 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Paths — detect yt-dlp binary based on OS
 const isWindows = process.platform === 'win32';
 const ytDlpBinary = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
-const ytDlpPath = path.join(__dirname, ytDlpBinary);
+let ytDlpPath = path.join(__dirname, ytDlpBinary);
 let ffmpegPath = '';
+
+// Cookies file path (for YouTube bot detection bypass)
+const COOKIES_FILE = process.env.COOKIES_FILE || path.join(__dirname, 'cookies.txt');
+
+// Try to install yt-dlp automatically on Linux (for cloud deployments like Render)
+function ensureYtDlp() {
+  if (fs.existsSync(ytDlpPath)) return true;
+
+  // On Linux/cloud, try to install via pip or download directly
+  if (!isWindows) {
+    console.log('📦 yt-dlp no encontrado localmente, intentando instalar...');
+
+    // Try pip install
+    try {
+      execSync('pip install --upgrade yt-dlp', { stdio: 'inherit', timeout: 120000 });
+      // Find where pip installed it
+      const pipPath = execSync('which yt-dlp 2>/dev/null || echo ""', { timeout: 5000 }).toString().trim();
+      if (pipPath && fs.existsSync(pipPath)) {
+        ytDlpPath = pipPath;
+        console.log('✅ yt-dlp instalado via pip:', ytDlpPath);
+        return true;
+      }
+    } catch (_) {
+      console.log('⚠️  pip install falló, intentando descarga directa...');
+    }
+
+    // Try direct download
+    try {
+      execSync(
+        'curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp && chmod +x ./yt-dlp',
+        { stdio: 'inherit', timeout: 60000, cwd: __dirname }
+      );
+      if (fs.existsSync(ytDlpPath)) {
+        console.log('✅ yt-dlp descargado directamente:', ytDlpPath);
+        return true;
+      }
+    } catch (_) {
+      console.log('⚠️  Descarga directa de yt-dlp falló');
+    }
+  }
+
+  return fs.existsSync(ytDlpPath);
+}
 
 // Detect ffmpeg
 function detectFfmpeg() {
@@ -45,6 +88,35 @@ function detectFfmpeg() {
   }
   console.warn('⚠️  ffmpeg no encontrado — la conversión a MP3 puede fallar');
   return 'ffmpeg';
+}
+
+// Build common yt-dlp args to bypass bot detection
+function getCommonArgs() {
+  const args = [
+    '--no-check-certificates',
+    '--prefer-insecure',
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    '--extractor-args', 'youtube:player_client=web',
+  ];
+
+  // Add cookies if available
+  if (fs.existsSync(COOKIES_FILE)) {
+    args.push('--cookies', COOKIES_FILE);
+    console.log('🍪 Usando cookies desde:', COOKIES_FILE);
+  } else if (process.env.YT_COOKIES) {
+    // Support cookies via environment variable (base64 encoded)
+    const tmpCookies = path.join(os.tmpdir(), 'yt-cookies.txt');
+    try {
+      const cookieContent = Buffer.from(process.env.YT_COOKIES, 'base64').toString('utf-8');
+      fs.writeFileSync(tmpCookies, cookieContent);
+      args.push('--cookies', tmpCookies);
+      console.log('🍪 Usando cookies desde variable de entorno YT_COOKIES');
+    } catch (e) {
+      console.warn('⚠️  Error al decodificar YT_COOKIES:', e.message);
+    }
+  }
+
+  return args;
 }
 
 // Run yt-dlp and return a promise with stdout/stderr
@@ -78,12 +150,15 @@ app.get('/api/info', async (req, res) => {
 
   try {
     const data = await new Promise((resolve, reject) => {
-      const proc = spawn(ytDlpPath, [
+      const infoArgs = [
+        ...getCommonArgs(),
         '--dump-json',
         '--no-playlist',
         '--no-warnings',
         url,
-      ], { windowsHide: true });
+      ];
+      console.log('▶ yt-dlp info:', infoArgs.join(' '));
+      const proc = spawn(ytDlpPath, infoArgs, { windowsHide: true });
 
       let out = '';
       let err = '';
@@ -139,6 +214,7 @@ app.get('/api/progress', async (req, res) => {
   try {
     // Build args — pass ffmpeg path only if we have it
     const args = [
+      ...getCommonArgs(),
       url,
       '--extract-audio',
       '--audio-format', 'mp3',
@@ -251,7 +327,7 @@ app.get('*', (req, res) => {
 // Start
 ffmpegPath = detectFfmpeg();
 
-if (!fs.existsSync(ytDlpPath)) {
+if (!ensureYtDlp()) {
   console.error(`❌ ${ytDlpBinary} no encontrado en: ${__dirname}`);
   console.error('Descarga yt-dlp desde: https://github.com/yt-dlp/yt-dlp/releases');
   if (isWindows) {
@@ -260,6 +336,13 @@ if (!fs.existsSync(ytDlpPath)) {
     console.error('  -> Descarga yt-dlp, hazlo ejecutable (chmod +x yt-dlp) y colócalo en la carpeta del proyecto');
   }
   process.exit(1);
+}
+
+console.log(`✅ yt-dlp encontrado: ${ytDlpPath}`);
+if (fs.existsSync(COOKIES_FILE)) {
+  console.log(`🍪 Archivo de cookies encontrado: ${COOKIES_FILE}`);
+} else {
+  console.log('ℹ️  Sin cookies configuradas — si YouTube bloquea las descargas, configura cookies (ver README)');
 }
 
 const server = app.listen(PORT, () => {
