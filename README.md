@@ -25,8 +25,8 @@ Convierte videos de YouTube a MP3 en máxima calidad (320kbps). Aplicación web 
 ### 1. Clona el repositorio
 
 ```bash
-git clone https://github.com/TU-USUARIO/yt-mp3-converter.git
-cd yt-mp3-converter
+git clone https://github.com/TU-USUARIO/YT-A-MP3.git
+cd TY-A-MP3
 ```
 
 ### 2. Instala las dependencias
