@@ -1,160 +1,17 @@
-# 🎵 YT MP3 — Convertidor de YouTube a MP3
-
-Convierte videos de YouTube a MP3 en máxima calidad (320kbps). Aplicación web con interfaz moderna. Funciona de manera local o desplegada en la nube (Render, etc.).
-
-![Node.js](https://img.shields.io/badge/Node.js-18+-green)
-![License](https://img.shields.io/badge/License-MIT-blue)
-
-## ✨ Características
-
-- 🎧 Conversión a MP3 en calidad 320kbps
-- 📺 Vista previa del video antes de convertir
-- 📊 Barra de progreso en tiempo real
-- 🚀 Rápido y sin límites
-- 🔒 Privado — proceso directo sin intermediarios
-- 🖥️ Compatible con Windows, macOS y Linux
-- ☁️ Desplegable en Render, Railway y otros servicios cloud
-
-## 📋 Requisitos
-
-- [Node.js](https://nodejs.org/) v18 o superior
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp/releases) — descarga el binario para tu sistema operativo
-- [ffmpeg](https://ffmpeg.org/download.html) — necesario para la conversión de audio (se incluye automáticamente vía `ffmpeg-static`, o puedes instalarlo en tu sistema)
-
-## 🚀 Instalación
-
-### 1. Clona el repositorio
-
-```bash
-git clone https://github.com/TU-USUARIO/yt-mp3-converter.git
-cd yt-mp3-converter
-```
-
-### 2. Instala las dependencias
-
-```bash
-npm install
-```
-
-### 3. Descarga yt-dlp
-
-Descarga el binario de yt-dlp desde [las releases oficiales](https://github.com/yt-dlp/yt-dlp/releases) y colócalo en la carpeta raíz del proyecto:
-
-- **Windows**: descarga `yt-dlp.exe`
-- **macOS/Linux**: descarga `yt-dlp` y hazlo ejecutable:
-  ```bash
-  chmod +x yt-dlp
-  ```
-
-### 4. Inicia la aplicación
-
-```bash
-npm start
-```
-
-### 5. Abre tu navegador
-
-Ve a [http://localhost:3000](http://localhost:3000) y empieza a convertir videos.
-
-## 🎯 Uso
-
-1. Pega la URL de un video de YouTube
-2. Haz clic en **Buscar Video** para ver la información
-3. Haz clic en **Convertir a MP3** para iniciar la conversión
-4. Descarga el archivo MP3 cuando esté listo
-
-## ☁️ Despliegue en Render (Internet)
-
-Puedes desplegar esta app en [Render](https://render.com/) para que cualquier persona la use desde internet.
-
-### Pasos:
-
-1. Sube el proyecto a un repositorio en GitHub
-2. Ve a [Render Dashboard](https://dashboard.render.com/) y crea un nuevo **Web Service**
-3. Conecta tu repositorio de GitHub
-4. Configura:
-   - **Build Command**: `npm install && bash build.sh`
-   - **Start Command**: `npm start`
-5. **Importante** — Configura las cookies de YouTube (ver sección siguiente)
-6. Haz clic en **Deploy**
-
-> El archivo `render.yaml` incluido ya tiene la configuración necesaria.
-
-### 🍪 Cookies de YouTube (IMPORTANTE para servidores cloud)
-
-YouTube bloquea las peticiones desde IPs de servidores cloud (Render, AWS, etc.) mostrando el error "Sign in to confirm you're not a bot". Para solucionarlo necesitas exportar cookies de tu cuenta de YouTube:
-
-#### Opción 1: Variable de entorno `YT_COOKIES` (recomendada para Render)
-
-1. Instala la extensión [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) en Chrome
-2. Ve a [youtube.com](https://youtube.com) y asegúrate de estar logueado
-3. Haz clic en la extensión y exporta las cookies (formato Netscape)
-4. Codifica el archivo en base64:
-   ```bash
-   # Linux/Mac:
-   base64 -w 0 cookies.txt
-   # Windows (PowerShell):
-   [Convert]::ToBase64String([IO.File]::ReadAllBytes('cookies.txt'))
-   ```
-5. En Render Dashboard → tu servicio → **Environment** → agrega la variable:
-   - **Key**: `YT_COOKIES`
-   - **Value**: (pega el texto base64)
-
-#### Opción 2: Archivo `cookies.txt` (para uso local)
-
-1. Exporta las cookies igual que arriba
-2. Guarda el archivo como `cookies.txt` en la raíz del proyecto
-3. Reinicia el servidor
-
-> ⚠️ Las cookies caducan periódicamente. Si vuelve el error de bot, exporta cookies nuevas.
-
-## ⚙️ Configuración
-
-### Puerto personalizado
-
-Por defecto la app corre en el puerto 3000. Puedes cambiarlo con la variable de entorno `PORT`:
-
-```bash
-PORT=8080 npm start
-```
-
-En Windows (PowerShell):
-```powershell
-$env:PORT=8080; npm start
-```
-
-## 🐛 Solución de problemas
-
-| Problema | Solución |
-|----------|----------|
-| `EADDRINUSE: address already in use` | El puerto ya está ocupado. Cierra la otra instancia o usa otro puerto: `$env:PORT=3001; npm start` (PowerShell) o `PORT=3001 npm start` (Linux/Mac) |
-| `yt-dlp no encontrado` | Descarga yt-dlp y colócalo en la carpeta del proyecto |
-| `ffmpeg no encontrado` | Se instala automáticamente con `npm install`. Si falla, instala ffmpeg manualmente |
-| `Error al obtener info del video` | Verifica que la URL sea válida y que yt-dlp esté actualizado |
-| `Sign in to confirm you're not a bot` | Configura cookies de YouTube (ver sección "Cookies de YouTube" arriba) |
-| La página no carga | Asegúrate de acceder desde `http://localhost:3000`, no abriendo el HTML directamente |
-
-## 📁 Estructura del proyecto
-
-```
-yt-mp3-converter/
-├── server.js          # Servidor Express (backend)
-├── package.json       # Dependencias y scripts
-├── public/
-│   ├── index.html     # Página principal
-│   ├── style.css      # Estilos
-│   └── app.js         # Lógica del frontend
-├── yt-dlp.exe         # Binario de yt-dlp (no incluido, descargar)
-├── build.sh           # Script de build para cloud (Render)
-├── render.yaml        # Configuración de Render
-├── cookies.txt        # Cookies de YouTube (opcional, no incluido)
-└── README.md
-```
-
-## 📄 Licencia
-
-MIT — Uso personal y educativo.
-
-## ⚠️ Aviso legal
-
-Esta herramienta es solo para uso personal. Asegúrate de respetar los derechos de autor y los términos de servicio de YouTube al descargar contenido.
+{
+  "name": "yt-mp3-converter",
+  "version": "1.0.0",
+  "description": "YouTube to MP3 converter at maximum quality",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "ffmpeg-static": "^5.2.0",
+    "uuid": "^14.0.1",
+    "yt-dlp-wrap": "^2.3.12"
+  }
+}
