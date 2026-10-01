@@ -13,11 +13,76 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Paths — detect yt-dlp binary based on OS
+// Paths — use the native binary for the current operating system
 const isWindows = process.platform === 'win32';
 const ytDlpBinary = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
-const ytDlpPath = path.join(__dirname, ytDlpBinary);
+const localYtDlpPath = path.join(__dirname, ytDlpBinary);
+let ytDlpPath = localYtDlpPath;
 let ffmpegPath = '';
+
+function resolveYtDlp() {
+  if (fs.existsSync(localYtDlpPath)) {
+    if (!isWindows) {
+      try {
+        fs.accessSync(localYtDlpPath, fs.constants.X_OK);
+      } catch (_) {
+        console.warn(`⚠️ ${localYtDlpPath} existe pero no es ejecutable`);
+      }
+    } else {
+      return localYtDlpPath;
+    }
+    if (isWindows) return localYtDlpPath;
+  }
+
+  try {
+    require('child_process').execFileSync(isWindows ? 'where' : 'which', [ytDlpBinary], {
+      stdio: 'ignore',
+      timeout: 3000,
+    });
+    return ytDlpBinary;
+  } catch (_) {
+    return null;
+  }
+}
+
+const DOWNLOAD_PRESETS = {
+  mp3: {
+    kind: 'audio',
+    extension: 'mp3',
+    format: null,
+    message: 'Convirtiendo a MP3 320kbps...',
+  },
+  'video-best': {
+    kind: 'video',
+    extension: 'mp4',
+    format: 'bestvideo+bestaudio/best',
+    message: 'Procesando vídeo en la máxima calidad disponible...',
+  },
+  'video-2160': {
+    kind: 'video',
+    extension: 'mp4',
+    format: 'bestvideo[height<=2160]+bestaudio/best[height<=2160]',
+    message: 'Procesando vídeo hasta 4K...',
+  },
+  'video-1440': {
+    kind: 'video',
+    extension: 'mp4',
+    format: 'bestvideo[height<=1440]+bestaudio/best[height<=1440]',
+    message: 'Procesando vídeo hasta 1440p...',
+  },
+  'video-1080': {
+    kind: 'video',
+    extension: 'mp4',
+    format: 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
+    message: 'Procesando vídeo hasta 1080p...',
+  },
+  'video-720': {
+    kind: 'video',
+    extension: 'mp4',
+    format: 'bestvideo[height<=720]+bestaudio/best[height<=720]',
+    message: 'Procesando vídeo hasta 720p...',
+  },
+};
 
 // Detect ffmpeg
 function detectFfmpeg() {
@@ -118,6 +183,8 @@ app.get('/api/info', async (req, res) => {
 app.get('/api/progress', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'URL requerida' });
+  const preset = DOWNLOAD_PRESETS[req.query.preset || 'mp3'];
+  if (!preset) return res.status(400).json({ error: 'Opción de descarga no válida' });
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -132,22 +199,17 @@ app.get('/api/progress', async (req, res) => {
   const tmpDir = os.tmpdir();
   const fileId = uuidv4();
   const outputTemplate = path.join(tmpDir, `${fileId}.%(ext)s`);
-  const outputMp3 = path.join(tmpDir, `${fileId}.mp3`);
 
-  sendEvent({ status: 'starting', message: 'Iniciando...', progress: 2 });
+  sendEvent({ status: 'starting', message: 'Iniciando...', progress: 2, kind: preset.kind });
 
   try {
-    // Build args — pass ffmpeg path only if we have it
-    const args = [
-      url,
-      '--extract-audio',
-      '--audio-format', 'mp3',
-      '--audio-quality', '0',
-      '--output', outputTemplate,
-      '--no-playlist',
-      '--newline',
-      '--progress',
-    ];
+    const args = [url, '--output', outputTemplate, '--no-playlist', '--newline', '--progress'];
+
+    if (preset.kind === 'audio') {
+      args.push('--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0');
+    } else {
+      args.push('--format', preset.format, '--merge-output-format', 'mp4');
+    }
 
     if (ffmpegPath && ffmpegPath !== 'ffmpeg') {
       // Pass directory containing ffmpeg, not the full path
@@ -165,37 +227,31 @@ app.get('/api/progress', async (req, res) => {
       }
       // ffmpeg post-processing
       if (line.includes('[ExtractAudio]') || line.includes('Destination:')) {
-        sendEvent({ status: 'converting', progress: 90, message: 'Convirtiendo a MP3 320kbps...' });
+        sendEvent({ status: 'converting', progress: 90, message: preset.message });
       }
     });
 
-    sendEvent({ status: 'converting', progress: 95, message: 'Finalizando conversión...' });
+    sendEvent({ status: 'converting', progress: 95, message: 'Finalizando archivo...' });
 
-    // Find the output file
-    let finalFile = null;
-    if (fs.existsSync(outputMp3)) {
-      finalFile = outputMp3;
-    } else {
-      // Look for any file starting with fileId
-      const files = fs.readdirSync(tmpDir).filter(f => f.startsWith(fileId));
-      if (files.length > 0) {
-        finalFile = path.join(tmpDir, files[0]);
-      }
-    }
+    const files = fs.readdirSync(tmpDir)
+      .filter(file => file.startsWith(`${fileId}.`))
+      .map(file => path.join(tmpDir, file));
+    const finalFile = files.find(file => fs.statSync(file).isFile());
 
     if (!finalFile || !fs.existsSync(finalFile)) {
-      sendEvent({ status: 'error', message: 'No se generó el archivo MP3. Verifica que ffmpeg esté instalado.' });
+      sendEvent({ status: 'error', message: `No se generó el archivo ${preset.kind === 'audio' ? 'MP3' : 'de vídeo'}. Verifica que ffmpeg esté instalado.` });
       return res.end();
     }
 
     // Move to public/downloads
     const publicTmpDir = path.join(__dirname, 'public', 'downloads');
     if (!fs.existsSync(publicTmpDir)) fs.mkdirSync(publicTmpDir, { recursive: true });
-    const publicFile = path.join(publicTmpDir, `${fileId}.mp3`);
+    const extension = path.extname(finalFile).toLowerCase().replace('.', '') || preset.extension;
+    const publicFile = path.join(publicTmpDir, `${fileId}.${extension}`);
     fs.renameSync(finalFile, publicFile);
 
-    sendEvent({ status: 'done', progress: 100, message: '¡Listo!', downloadId: fileId });
-    console.log(`✅ Conversión completada: ${fileId}.mp3`);
+    sendEvent({ status: 'done', progress: 100, message: '¡Listo!', downloadId: fileId, extension, kind: preset.kind });
+    console.log(`✅ Descarga completada: ${fileId}.${extension}`);
 
   } catch (err) {
     console.error('Error en /api/progress:', err.message);
@@ -205,19 +261,28 @@ app.get('/api/progress', async (req, res) => {
   res.end();
 });
 
-// Serve the MP3 file for download
+// Serve the generated file for download
 app.get('/downloads/:id', (req, res) => {
   const { id } = req.params;
   // Sanitize id
   if (!/^[a-f0-9\-]+$/i.test(id)) return res.status(400).json({ error: 'ID inválido' });
 
-  const filePath = path.join(__dirname, 'public', 'downloads', `${id}.mp3`);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Archivo no encontrado o ya fue descargado' });
+  const downloadsDir = path.join(__dirname, 'public', 'downloads');
+  const fileName = fs.readdirSync(downloadsDir).find(file => file.startsWith(`${id}.`));
+  if (!fileName) return res.status(404).json({ error: 'Archivo no encontrado o ya fue descargado' });
+  const filePath = path.join(downloadsDir, fileName);
 
   const stat = fs.statSync(filePath);
-  const title = req.query.title ? decodeURIComponent(req.query.title) : `${id}.mp3`;
+  const extension = path.extname(fileName).toLowerCase();
+  const isAudio = extension === '.mp3';
+  const contentTypes = {
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.mkv': 'video/x-matroska',
+  };
+  const title = req.query.title || `${id}${extension}`;
 
-  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : (contentTypes[extension] || 'application/octet-stream'));
   res.setHeader('Content-Length', stat.size);
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(title)}`);
 
@@ -233,7 +298,7 @@ app.get('/downloads/:id', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    ytDlp: fs.existsSync(ytDlpPath),
+    ytDlp: Boolean(ytDlpPath),
     ffmpeg: ffmpegPath || 'not found',
   });
 });
@@ -250,14 +315,15 @@ app.get('*', (req, res) => {
 
 // Start
 ffmpegPath = detectFfmpeg();
+ytDlpPath = resolveYtDlp();
 
-if (!fs.existsSync(ytDlpPath)) {
-  console.error(`❌ ${ytDlpBinary} no encontrado en: ${__dirname}`);
+if (!ytDlpPath) {
+  console.error(`❌ ${ytDlpBinary} no encontrado localmente ni en el PATH`);
   console.error('Descarga yt-dlp desde: https://github.com/yt-dlp/yt-dlp/releases');
   if (isWindows) {
     console.error('  -> Descarga yt-dlp.exe y colócalo en la carpeta del proyecto');
   } else {
-    console.error('  -> Descarga yt-dlp, hazlo ejecutable (chmod +x yt-dlp) y colócalo en la carpeta del proyecto');
+    console.error('  -> Instálalo con tu gestor de paquetes o coloca yt-dlp en la carpeta del proyecto y ejecuta: chmod +x yt-dlp');
   }
   process.exit(1);
 }
