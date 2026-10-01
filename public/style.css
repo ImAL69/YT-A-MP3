@@ -433,6 +433,43 @@ body {
   color: var(--purple);
 }
 
+/* ====== DOWNLOAD OPTIONS ====== */
+.download-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: rgba(59, 130, 246, 0.07);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 14px;
+  animation: fadeSlideIn 0.35s ease;
+}
+.download-options label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+#download-preset {
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(5, 5, 16, 0.75);
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font: 500 14px 'Inter', sans-serif;
+  outline: none;
+  cursor: pointer;
+}
+#download-preset:focus {
+  border-color: var(--border-accent);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+.download-options p {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
 /* ====== PROGRESS ====== */
 .progress-section {
   display: flex;

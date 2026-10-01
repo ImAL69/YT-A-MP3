@@ -60,7 +60,7 @@
         <!-- Video Preview -->
         <div class="video-preview" id="video-preview" style="display:none;">
           <div class="preview-thumbnail-wrapper">
-            <img id="preview-thumbnail" src="" alt="Miniatura" />
+            <img id="preview-thumbnail" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Miniatura" />
             <div class="play-overlay"><svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
           </div>
           <div class="preview-info">
@@ -85,9 +85,23 @@
             </div>
             <div class="quality-info">
               <div class="quality-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>MP3 · 320kbps</div>
-              <div class="quality-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Máxima Calidad</div>
+              <div class="quality-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Vídeo hasta 4K · 60+ FPS</div>
             </div>
           </div>
+        </div>
+
+        <!-- Download options -->
+        <div class="download-options" id="download-options" style="display:none;">
+          <label for="download-preset">Formato y calidad</label>
+          <select id="download-preset">
+            <option value="mp3">MP3 · Audio 320 kbps</option>
+            <option value="video-best">Vídeo · Máxima calidad disponible (4K/60+ FPS)</option>
+            <option value="video-2160">Vídeo · Hasta 4K (2160p)</option>
+            <option value="video-1440">Vídeo · Hasta 1440p</option>
+            <option value="video-1080">Vídeo · Hasta 1080p</option>
+            <option value="video-720">Vídeo · Hasta 720p</option>
+          </select>
+          <p>La calidad real depende de la versión disponible en el vídeo. Las pistas de vídeo y audio se combinan automáticamente.</p>
         </div>
 
         <!-- Progress -->
@@ -109,7 +123,7 @@
         <!-- Download Ready -->
         <div class="download-ready" id="download-ready" style="display:none;">
           <div class="success-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-          <div class="ready-text"><strong>¡Tu MP3 está listo!</strong><p>Calidad 320kbps · Descarga inmediata</p></div>
+          <div class="ready-text"><strong id="ready-title">¡Tu archivo está listo!</strong><p id="ready-description">Descarga inmediata</p></div>
           <a class="download-btn" id="download-link" href="#" download>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Descargar MP3

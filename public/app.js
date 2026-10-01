@@ -12,6 +12,8 @@ const videoPreview = document.getElementById('video-preview');
 const progressSection = document.getElementById('progress-section');
 const downloadReady = document.getElementById('download-ready');
 const errorSection = document.getElementById('error-section');
+const downloadOptions = document.getElementById('download-options');
+const downloadPreset = document.getElementById('download-preset');
 const newBtn = document.getElementById('new-btn');
 const retryBtn = document.getElementById('retry-btn');
 const downloadLink = document.getElementById('download-link');
@@ -19,6 +21,7 @@ const downloadLink = document.getElementById('download-link');
 // State
 let currentUrl = '';
 let currentTitle = '';
+let currentExtension = 'mp3';
 
 // ====== PARTICLES ======
 (function initParticles() {
@@ -89,6 +92,7 @@ function hideAll() {
   progressSection.style.display = 'none';
   downloadReady.style.display = 'none';
   errorSection.style.display = 'none';
+  downloadOptions.style.display = 'none';
 }
 function showError(msg) {
   hideAll();
@@ -167,6 +171,7 @@ async function fetchVideoInfo(url) {
     document.querySelector('#preview-views span').textContent = formatViews(data.view_count);
 
     videoPreview.style.display = 'flex';
+    downloadOptions.style.display = 'flex';
     setConvertBtn('normal');
     convertBtn.querySelector('.btn-text').textContent = 'Convertir a MP3';
 
@@ -188,7 +193,7 @@ async function startConversion(url) {
   setStep('download');
 
   return new Promise((resolve, reject) => {
-    const evtSrc = new EventSource(`/api/progress?url=${encodeURIComponent(url)}`);
+    const evtSrc = new EventSource(`/api/progress?url=${encodeURIComponent(url)}&preset=${encodeURIComponent(downloadPreset.value)}`);
 
     evtSrc.onmessage = (e) => {
       try {
@@ -210,10 +215,17 @@ async function startConversion(url) {
 
           // Build download URL
           const downloadId = data.downloadId;
-          const fileName = encodeURIComponent(currentTitle || 'audio') + '.mp3';
+          currentExtension = data.extension || (downloadPreset.value === 'mp3' ? 'mp3' : 'mp4');
+          const fileName = encodeURIComponent(currentTitle || 'download') + `.${currentExtension}`;
           const href = `/downloads/${downloadId}?title=${fileName}`;
           downloadLink.href = href;
-          downloadLink.setAttribute('download', (currentTitle || 'audio') + '.mp3');
+          downloadLink.setAttribute('download', (currentTitle || 'download') + `.${currentExtension}`);
+          const isAudio = currentExtension === 'mp3';
+          document.getElementById('ready-title').textContent = isAudio ? '¡Tu MP3 está listo!' : '¡Tu vídeo está listo!';
+          document.getElementById('ready-description').textContent = isAudio
+            ? 'Calidad 320kbps · Descarga inmediata'
+            : 'Máxima calidad disponible · Descarga inmediata';
+          downloadLink.lastChild.textContent = isAudio ? ' Descargar MP3' : ' Descargar vídeo';
 
           setTimeout(() => {
             progressSection.style.display = 'none';
@@ -290,6 +302,7 @@ newBtn.addEventListener('click', () => {
   urlInput.value = '';
   currentUrl = '';
   currentTitle = '';
+  currentExtension = 'mp3';
   phase = 'search';
   hideAll();
   convertBtn.querySelector('.btn-text').textContent = 'Buscar Video';
