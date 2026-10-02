@@ -86,6 +86,16 @@ function formatViews(n) {
   return n + ' vistas';
 }
 
+function isAudioPreset() {
+  return downloadPreset.value === 'mp3';
+}
+
+function updateFormatLabels() {
+  const isAudio = isAudioPreset();
+  convertBtn.querySelector('.btn-text').textContent = isAudio ? 'Convertir a MP3' : 'Convertir a MP4';
+  downloadLink.lastChild.textContent = isAudio ? ' Descargar MP3' : ' Descargar MP4';
+}
+
 // ====== UI STATE HELPERS ======
 function hideAll() {
   videoPreview.style.display = 'none';
@@ -173,7 +183,7 @@ async function fetchVideoInfo(url) {
     videoPreview.style.display = 'flex';
     downloadOptions.style.display = 'flex';
     setConvertBtn('normal');
-    convertBtn.querySelector('.btn-text').textContent = 'Convertir a MP3';
+    updateFormatLabels();
 
   } catch (err) {
     if (err instanceof TypeError && err.message.includes('fetch')) {
@@ -225,7 +235,7 @@ async function startConversion(url) {
           document.getElementById('ready-description').textContent = isAudio
             ? 'Calidad 320kbps · Descarga inmediata'
             : 'Máxima calidad disponible · Descarga inmediata';
-          downloadLink.lastChild.textContent = isAudio ? ' Descargar MP3' : ' Descargar vídeo';
+          downloadLink.lastChild.textContent = isAudio ? ' Descargar MP3' : ' Descargar MP4';
 
           setTimeout(() => {
             progressSection.style.display = 'none';
@@ -297,6 +307,8 @@ urlInput.addEventListener('input', () => {
   }
 });
 
+downloadPreset.addEventListener('change', updateFormatLabels);
+
 // ====== NEW / RETRY BUTTONS ======
 newBtn.addEventListener('click', () => {
   urlInput.value = '';
@@ -329,7 +341,7 @@ downloadLink.addEventListener('click', async (e) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = (currentTitle || 'audio') + '.mp3';
+    a.download = (currentTitle || (currentExtension === 'mp4' ? 'video' : 'audio')) + `.${currentExtension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

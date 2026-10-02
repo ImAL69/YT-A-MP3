@@ -112,6 +112,27 @@ function detectFfmpeg() {
   return 'ffmpeg';
 }
 
+function moveFile(source, destination) {
+  try {
+    fs.renameSync(source, destination);
+    return;
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+  }
+
+  const temporaryDestination = `${destination}.part`;
+  try {
+    fs.copyFileSync(source, temporaryDestination);
+    fs.renameSync(temporaryDestination, destination);
+    fs.unlinkSync(source);
+  } catch (err) {
+    try {
+      fs.unlinkSync(temporaryDestination);
+    } catch (_) {}
+    throw err;
+  }
+}
+
 // Run yt-dlp and return a promise with stdout/stderr
 function runYtDlp(args, onData) {
   return new Promise((resolve, reject) => {
@@ -208,7 +229,7 @@ app.get('/api/progress', async (req, res) => {
     if (preset.kind === 'audio') {
       args.push('--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0');
     } else {
-      args.push('--format', preset.format, '--merge-output-format', 'mp4');
+      args.push('--format', preset.format, '--merge-output-format', 'mp4', '--remux-video', 'mp4');
     }
 
     if (ffmpegPath && ffmpegPath !== 'ffmpeg') {
@@ -236,7 +257,10 @@ app.get('/api/progress', async (req, res) => {
     const files = fs.readdirSync(tmpDir)
       .filter(file => file.startsWith(`${fileId}.`))
       .map(file => path.join(tmpDir, file));
-    const finalFile = files.find(file => fs.statSync(file).isFile());
+    const finalFile = files.find(file =>
+      fs.statSync(file).isFile() &&
+      path.extname(file).toLowerCase() === `.${preset.extension}`
+    );
 
     if (!finalFile || !fs.existsSync(finalFile)) {
       sendEvent({ status: 'error', message: `No se generó el archivo ${preset.kind === 'audio' ? 'MP3' : 'de vídeo'}. Verifica que ffmpeg esté instalado.` });
@@ -248,7 +272,7 @@ app.get('/api/progress', async (req, res) => {
     if (!fs.existsSync(publicTmpDir)) fs.mkdirSync(publicTmpDir, { recursive: true });
     const extension = path.extname(finalFile).toLowerCase().replace('.', '') || preset.extension;
     const publicFile = path.join(publicTmpDir, `${fileId}.${extension}`);
-    fs.renameSync(finalFile, publicFile);
+    moveFile(finalFile, publicFile);
 
     sendEvent({ status: 'done', progress: 100, message: '¡Listo!', downloadId: fileId, extension, kind: preset.kind });
     console.log(`✅ Descarga completada: ${fileId}.${extension}`);
